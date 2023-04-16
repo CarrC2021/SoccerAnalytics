@@ -1,0 +1,8 @@
+bin/*
+include/*
+lib/*
+lib64/*
+share/*
+pyenv.cfg
+project/data/*
+project/all_events.json
