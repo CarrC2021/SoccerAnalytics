@@ -18,7 +18,7 @@ setup(
     long_description=readme,
     author='Casey Carr',
     author_email='ccarr2017@gmail.com',
-    url='https://github.com/kennethreitz/samplemod',
+    url='https://github.com/CarrC2021/SoccerAnalytics',
     license=license,
     packages=find_packages(exclude=('tests', 'docs'))
 )
