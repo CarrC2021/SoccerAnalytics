@@ -26,25 +26,6 @@ class xGmodel:
             return self.model.params
         else:
             return None
-
-    def calc_xG(self, shot_data: pd.DataFrame) -> float:
-        """
-        Calculate the expected goal (xG) value for a given shot data using the loaded stats model.
-
-        Args:
-            shot_data (pd.DataFrame): A DataFrame containing the shot data with columns matching the model variables.
-
-        Returns:
-            float: The calculated expected goal (xG) value.
-        """
-        if self.model is not None:
-            bsum = self.model.params[0]
-            for i, v in enumerate(self.model_variables):
-                bsum = bsum + self.model.params[i + 1] * shot_data[v]
-            xG = 1 / (1 + np.exp(bsum))
-            return xG
-        else:
-            return None
         
     def calc_xG(self, x: float, y: float) -> float:
         """
@@ -72,19 +53,18 @@ class xGmodel:
         df.assign(xG = self.calc_xG(df))
         return df
 
-
     @staticmethod
-    def shot_vars_from_x_and_y(x_coordinate: float, y_coordinate: float):
-        shot_data = []
-        angle = np.arctan(7.32 * x_coordinate / (x_coordinate**2 + abs(y_coordinate - 68/2)**2 - (7.32/2)**2))
-        if angle < 0:
-            angle = np.pi + angle
-        shot_data.append(angle)
-        shot_data.append(np.sqrt(x_coordinate**2 + abs(y_coordinate - 68/2)**2))
-        shot_data.append(x_coordinate**2 + abs(y_coordinate - 68/2)**2)
-        shot_data.append(x_coordinate)
-        shot_data.append(x_coordinate * angle)
-        shot_data.append(x_coordinate**2)
-        shot_data.append(abs(y_coordinate - 68/2))
-        shot_data.append((y_coordinate - 68/2)**2)
+    def shot_vars_from_x_and_y(x_coordinate: float, y_coordinate: float) -> pd.DataFrame:
+        shot_data=dict()
+        a = np.arctan(7.32 *x_coordinate /(x_coordinate**2 + abs(y_coordinate-68/2)**2 - (7.32/2)**2))
+        if a<0:
+            a = np.pi + a
+        shot_data['Angle'] = a
+        shot_data['Distance'] = np.sqrt(x_coordinate**2 + abs(y_coordinate-68/2)**2)
+        shot_data['D2'] = x_coordinate**2 + abs(y_coordinate-68/2)**2
+        shot_data['X'] = x_coordinate
+        shot_data['AX'] = x_coordinate*a
+        shot_data['X2'] = x_coordinate**2
+        shot_data['C'] = abs(y_coordinate-68/2)
+        shot_data['C2'] = (y_coordinate-68/2)**2
         return shot_data
