@@ -28,6 +28,8 @@ for file in os.listdir(f'{CWD}/data/Wyscout/events'):
     path = f'{CWD}/data/Wyscout/events/{file}'
     with open(path) as f:
         data = json.load(f)
+    data = pd.DataFrame(data)
+    data = data.loc[data['subEventName'] == 'Shot']
     all_data = pd.concat([all_data, pd.DataFrame(data)])
 
 shots = all_data.loc[all_data['subEventName'] == 'Shot']
