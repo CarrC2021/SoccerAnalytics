@@ -50,6 +50,7 @@ class xGmodel:
         
     def assign_xG(self, df: pd.DataFrame) -> pd.DataFrame:
         # Assumes that the df is properly formatted in order to calculate xG
+        # Basically that the coordinates have been adjusted to the standard 105x68 field
         df.assign(xG = self.calc_xG(df))
         return df
 
