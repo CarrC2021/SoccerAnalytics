@@ -241,13 +241,13 @@ for i in range(5):
 # from the latter one. This is one way of doing that. The other would be to keep all moving the ball actions,
 # calculate xT for the successful ones and assign -xT value of the starting zone for the unsuccessful ones. 
 
-# #only successful
-# successful_moves = move_df.loc[move_df.apply(lambda x:{'id':1801} in x.tags, axis = 1)]
-# #calculatexT
-# successful_moves["xT_added"] = successful_moves.apply(lambda row: xT[row.end_sector[1] - 1][row.end_sector[0] - 1] 
-#                                                       - xT[row.start_sector[1] - 1][row.start_sector[0] - 1], axis = 1)
-# #only progressive
-# value_adding_actions = successful_moves.loc[successful_moves["xT_added"] > 0]
+#only successful
+successful_moves = move_df.loc[move_df.apply(lambda x:{'id':1801} in x.tags, axis = 1)]
+#calculatexT
+successful_moves["xT_added"] = successful_moves.apply(lambda row: xT[row.end_sector[1] - 1][row.end_sector[0] - 1] 
+                                                      - xT[row.start_sector[1] - 1][row.start_sector[0] - 1], axis = 1)
+#only progressive
+value_adding_actions = successful_moves.loc[successful_moves["xT_added"] > 0]
 
 ##############################################################################
 # Finding out players with highest xT
@@ -261,39 +261,39 @@ for i in range(5):
 
 
 #group by player
-# xT_by_player = value_adding_actions.groupby(["playerId"])["xT_added"].sum().reset_index()
+xT_by_player = value_adding_actions.groupby(["playerId"])["xT_added"].sum().reset_index()
 
-# #merging player name
-# path = os.path.join(str(pathlib.Path().resolve().parents[0]),"data", 'Wyscout', 'players.json')
-# player_df = pd.read_json(path, encoding='unicode-escape')
-# player_df.rename(columns = {'wyId':'playerId'}, inplace=True)
-# player_df["role"] = player_df.apply(lambda x: x.role["name"], axis = 1)
-# to_merge = player_df[['playerId', 'shortName', 'role']]
+#merging player name
+path = os.path.join(str(pathlib.Path().resolve().parents[0]),"data", 'Wyscout', 'players.json')
+player_df = pd.read_json(path, encoding='unicode-escape')
+player_df.rename(columns = {'wyId':'playerId'}, inplace=True)
+player_df["role"] = player_df.apply(lambda x: x.role["name"], axis = 1)
+to_merge = player_df[['playerId', 'shortName', 'role']]
 
-# summary = xT_by_player.merge(to_merge, how = "left", on = ["playerId"])
+summary = xT_by_player.merge(to_merge, how = "left", on = ["playerId"])
 
-# path = os.path.join(str(pathlib.Path().resolve().parents[0]),"minutes_played", 'minutes_played_per_game_England.json')
-# with open(path) as f:
-#     minutes_per_game = json.load(f)
-# #filtering over 400 per game
-# minutes_per_game = pd.DataFrame(minutes_per_game)
-# minutes = minutes_per_game.groupby(["playerId"]).minutesPlayed.sum().reset_index()
-# summary = minutes.merge(summary, how = "left", on = ["playerId"])
-# summary = summary.fillna(0)
-# summary = summary.loc[summary["minutesPlayed"] > 400]
-# #calculating per 90
-# summary["xT_per_90"] = summary["xT_added"]*90/summary["minutesPlayed"]
+path = os.path.join(str(pathlib.Path().resolve().parents[0]),"minutes_played", 'minutes_played_per_game_England.json')
+with open(path) as f:
+    minutes_per_game = json.load(f)
+#filtering over 400 per game
+minutes_per_game = pd.DataFrame(minutes_per_game)
+minutes = minutes_per_game.groupby(["playerId"]).minutesPlayed.sum().reset_index()
+summary = minutes.merge(summary, how = "left", on = ["playerId"])
+summary = summary.fillna(0)
+summary = summary.loc[summary["minutesPlayed"] > 400]
+#calculating per 90
+summary["xT_per_90"] = summary["xT_added"]*90/summary["minutesPlayed"]
 
 # #adjusting for possesion
-# path = os.path.join(str(pathlib.Path().resolve().parents[0]),"minutes_played", 'player_possesion_England.json')
-# with open(path) as f:
-#     percentage_df = json.load(f)
-# percentage_df = pd.DataFrame(percentage_df)
-# #merge it
-# summary = summary.merge(percentage_df, how = "left", on = ["playerId"])
+path = os.path.join(str(pathlib.Path().resolve().parents[0]),"minutes_played", 'player_possesion_England.json')
+with open(path) as f:
+    percentage_df = json.load(f)
+percentage_df = pd.DataFrame(percentage_df)
+#merge it
+summary = summary.merge(percentage_df, how = "left", on = ["playerId"])
 
-# summary["xT_adjusted_per_90"] = (summary["xT_added"]/summary["possesion"])*90/summary["minutesPlayed"]
-# summary[['shortName', 'xT_adjusted_per_90']].sort_values(by='xT_adjusted_per_90', ascending=False).head(5)
+summary["xT_adjusted_per_90"] = (summary["xT_added"]/summary["possesion"])*90/summary["minutesPlayed"]
+summary[['shortName', 'xT_adjusted_per_90']].sort_values(by='xT_adjusted_per_90', ascending=False).head(5)
 ##############################################################################
 # Challenge
 # ----------------------------
