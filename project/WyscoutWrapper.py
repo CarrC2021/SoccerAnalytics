@@ -2,6 +2,7 @@ import json
 import os
 import numpy as np
 import pandas as pd
+import sql_wrapper
 
 
 class WyscoutWrapper():
@@ -49,6 +50,9 @@ class WyscoutWrapper():
             "Shot": 10
         }
         self.tag_dict = data = {
+            401: "Left foot",
+            402: "Right foot",
+            403: "Head/body",
             1201: "Goal low center",
             1202: "Goal low right",
             1203: "Goal center",
@@ -73,6 +77,7 @@ class WyscoutWrapper():
             1222: "Post high left",
             1223: "Post high right"
         }
+        self.strong_foot_dict = sql_wrapper.SQLWrapper().get_strong_foot()
 
     def load_all(self) -> pd.DataFrame:
         all_data = pd.DataFrame()
@@ -117,8 +122,21 @@ class WyscoutWrapper():
         # Need to implement this function still
         df = df.loc[df['subEventName'] == f'{player_name}']
         return df
+    
+    def denormalize_coordinates(self, data: pd.DataFrame) -> pd.DataFrame:
+        # exclude places where positions is not a list of two tuples
+        data = data.loc[data.positions.apply(
+            lambda cell: isinstance(cell, list) and len(cell) == 2)]
+        data["X"] = data.positions.apply(
+            lambda cell: cell[0]['x'] * 105/100)
+        data["Y"] = data.positions.apply(lambda cell: cell[0]['y'] * 68/100)
+        data["end_x"] = data.positions.apply(
+            lambda cell: (cell[1]['x']) * 105/100)
+        data["end_y"] = data.positions.apply(
+            lambda cell: cell[1]['y'] * 68/100)
+        return data
 
-    def fix_coordinates(self, data: pd.DataFrame) -> pd.DataFrame:
+    def fix_shot_coordinates(self, data: pd.DataFrame) -> pd.DataFrame:
         data["X"] = data.positions.apply(
             lambda cell: (100 - cell[0]['x']) * 105/100)
         data["Y"] = data.positions.apply(lambda cell: cell[0]['y'] * 68/100)
@@ -128,8 +146,16 @@ class WyscoutWrapper():
             lambda cell: (100 - cell[1]['y']) * 68/100)
         return data
 
+    def assign_body_part(self, data: pd.DataFrame) -> pd.DataFrame:
+        data['isLeftFoot'] = data.tags.apply(lambda row: 1 if {'id': 401} in row else 0)
+        data['isRightFoot'] = data.tags.apply(lambda row: 1 if {'id': 402} in row else 0)
+        data['isHeadOrBody'] = data.tags.apply(lambda row: 1 if {'id': 403} in row else 0)
+        # remove rows with playerId == 0 or NaN
+        data = data.loc[data['playerId'] != 0]
+        return data
+
     def fixed_shot_data(self, shots: pd.DataFrame) -> pd.DataFrame:
-        shots = self.fix_coordinates(shots)
+        shots = self.fix_shot_coordinates(shots)
         shots["C"] = shots.positions.apply(
             lambda cell: abs(cell[0]['y'] - 50) * 68/100)
         shots["Distance"] = np.sqrt(shots["X"]**2 + shots["C"]**2)
@@ -143,18 +169,5 @@ class WyscoutWrapper():
         return shots
 
     def only_shot_data(self, shots: pd.DataFrame) -> pd.DataFrame:
-        shots = self.fix_coordinates(shots)
-        shots["C"] = shots.positions.apply(
-            lambda cell: abs(cell[0]['y'] - 50) * 68/100)
-        shots["Distance"] = np.sqrt(shots["X"]**2 + shots["C"]**2)
-        shots["Angle"] = np.where(np.arctan(7.32 * shots["X"] / (shots["X"]**2 + shots["C"]**2 - (7.32/2)**2)) > 0, np.arctan(7.32 * shots["X"] / (
-            shots["X"]**2 + shots["C"]**2 - (7.32/2)**2)), np.arctan(7.32 * shots["X"] / (shots["X"]**2 + shots["C"]**2 - (7.32/2)**2)) + np.pi)
-        shots["Goal"] = shots.tags.apply(
-            lambda x: 1 if {'id': 101} in x else 0).astype(object)
-        shots["X2"] = shots['X']**2
-        shots["C2"] = shots['C']**2
-        shots["AX"] = shots['Angle']*shots['X']
-
-        shots = shots[['Goal', 'X', 'Y', 'C',
-                       'Distance', 'Angle', 'X2', 'C2', 'AX']]
+        shots = self.fixed_shot_data(shots)
         return shots

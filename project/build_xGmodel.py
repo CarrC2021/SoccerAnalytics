@@ -7,7 +7,9 @@ import statsmodels.formula.api as smf
 import sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegressionCV
+import sql_wrapper
 import os
+import WyscoutWrapper
 import warnings
 
 pd.options.mode.chained_assignment = None
@@ -23,31 +25,19 @@ HEADER = 403
 
 CWD = os.path.dirname(os.path.realpath(__file__))
 
-all_data = pd.DataFrame()
-for file in os.listdir(f'{CWD}/data/Wyscout/events'):
-    path = f'{CWD}/data/Wyscout/events/{file}'
-    with open(path) as f:
-        data = json.load(f)
-    data = pd.DataFrame(data)
-    data = data.loc[data['subEventName'] == 'Shot']
-    all_data = pd.concat([all_data, pd.DataFrame(data)])
+sql = sql_wrapper.SQLWrapper()
+strong_foot_dict = sql.get_strong_foot()
 
-shots = all_data.loc[all_data['subEventName'] == 'Shot']
-dictionary = {'id': HEADER}
-shots = shots[shots['tags'].apply(lambda x: dictionary in x)]
-print(shots)
-shots["X"] = shots.positions.apply(lambda cell: (100 - cell[0]['x']) * 105/100)
-shots["Y"] = shots.positions.apply(lambda cell: cell[0]['y'] * 68/100)
-shots["C"] = shots.positions.apply(lambda cell: abs(cell[0]['y'] - 50) * 68/100)
-shots["Distance"] = np.sqrt(shots["X"]**2 + shots["C"]**2)
-shots["Angle"] = np.where(np.arctan(7.32 * shots["X"] / (shots["X"]**2 + shots["C"]**2 - (7.32/2)**2)) > 0, np.arctan(7.32 * shots["X"] /(shots["X"]**2 + shots["C"]**2 - (7.32/2)**2)), np.arctan(7.32 * shots["X"] /(shots["X"]**2 + shots["C"]**2 - (7.32/2)**2)) + np.pi)
-shots["Goal"] = shots.tags.apply(lambda x: 1 if {'id':GOAL} in x else 0).astype(object)
-shots["X2"] = shots['X']**2
-shots["C2"] = shots['C']**2
-shots["AX"]  = shots['Angle']*shots['X']
+wyscout = WyscoutWrapper.WyscoutWrapper()
+shots = wyscout.load_all_events(['Shot'])
+
+# remove the rows where the shot was not a header 
+shots = wyscout.fixed_shot_data(shots)
+# locate where the shot was a header by seeing where header = {'id': 403} in tags
+shots['header'] = shots.apply(lambda x: 1 if {'id': 403} in x.tags else 0, axis=1)
+shots = shots.loc[shots['header'] == 0]
 
 shots = shots[['Goal', 'X', 'Y', 'C', 'Distance', 'Angle', 'X2', 'C2', 'AX']]
-train, test = train_test_split(shots, test_size=.2)
 
 # list the model variables you want here
 model_variables = ['Angle','Distance','X','C', "X2", "C2", "AX"]
@@ -58,6 +48,12 @@ test_model = smf.glm(formula="Goal ~ " + model, data=shots,
                            family=sm.families.Binomial()).fit()
 #print summary
 print(test_model.summary())
+# save the summary to a txt file
+with open(f'{CWD}/models/notheaders.txt', 'w') as fh:
+    fh.write(test_model.summary().as_text())
 b=test_model.params
 
-test_model.save(f'{CWD}/models/headers.pickle')
+test_model.save(f'{CWD}/models/notheaders.pickle')
+
+# load the model using the xGmodel class
+# model = xGmodel.xGmodel(model_path='models/notheaders.pickle')

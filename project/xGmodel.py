@@ -3,9 +3,10 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import numpy as np
 import pandas as pd
+import pickle
 
 class xGmodel:
-    def __init__(self, model_path) -> None:
+    def __init__(self, model_path: str) -> None:
         self.model_path = model_path
         self.model = None
         self.model_variables = ['Angle', 'Distance', 'X', 'C', 'X2', 'C2', 'AX']
@@ -13,7 +14,7 @@ class xGmodel:
 
     def load_model(self):
         with open(self.model_path, 'rb') as f:
-            self.model = statsmodels.iolib.smpickle.load_pickle(f)
+            self.model = pickle.load(f)
 
     def get_summary(self):
         if self.model is not None:
@@ -47,11 +48,13 @@ class xGmodel:
             return xG
         else:
             return None
-        
+    
     def assign_xG(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Assumes that the df is properly formatted in order to calculate xG
-        # Basically that the coordinates have been adjusted to the standard 105x68 field
-        df.assign(xG = self.calc_xG(df))
+        df['xG'] = df.apply(lambda x: self.calc_xG(x.X, x.Y), axis=1)
+        return df
+
+    def assign_xA(self, df: pd.DataFrame) -> pd.DataFrame:
+        df['xA'] = df.apply(lambda row: self.calc_xG(105 - row.end_x, row.end_y), axis=1)
         return df
 
     @staticmethod

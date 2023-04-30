@@ -41,6 +41,11 @@ class SQLWrapper:
         df = pd.read_sql_query(
             f"SELECT * FROM test_passes WHERE x BETWEEN {sector[0] * 105 / 16} AND {sector[1] * 105 / 16} AND y BETWEEN {sector[2] * 68 / 12} AND {sector[3] * 68 / 12} AND playerId = {player_id}", self.conn)
         return df
+
+    def get_passes_received(self, player_id: int) -> pd.DataFrame:
+        df = pd.read_sql_query(
+            f"SELECT * FROM test_passes WHERE nextPlayerId = {player_id}", self.conn)
+        return df
     
     def get_passes_by_player(self, player_id: int) -> pd.DataFrame:
         df = pd.read_sql_query(
@@ -58,6 +63,31 @@ class SQLWrapper:
         df = pd.read_sql_query(
             f"SELECT shortName FROM players WHERE wyId = {player_id}", self.conn)
         return df['shortName'][0]
+
+    # function that loads the teams table into a dataframe
+    def get_teams(self) -> pd.DataFrame:
+        df = pd.read_sql_query(
+            f"SELECT * FROM teams", self.conn)
+        return df
+
+    # function that returns all shots that match the given matchId
+    def get_shots_by_match(self, match_id: int) -> pd.DataFrame:
+        df = pd.read_sql_query(
+            f"SELECT * FROM shots WHERE matchId = {match_id}", self.conn)
+        return df
+
+    # function that returns all shots that match the given matchId
+    def get_passes_by_match(self, match_id: int) -> pd.DataFrame:
+        df = pd.read_sql_query(
+            f"SELECT * FROM passes WHERE matchId = {match_id}", self.conn)
+        return df
+
+    # load the strong foot data from the players table as a dictionary with the 
+    # key being the player's id and the value being the player's strong foot
+    def get_strong_foot(self) -> dict:
+        df = pd.read_sql_query(
+            f"SELECT wyId, foot FROM players", self.conn)
+        return dict(zip(df['wyId'], df['foot']))
 
     
 

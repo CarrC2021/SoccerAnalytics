@@ -21,7 +21,12 @@ import WyscoutWrapper
 import sqlite3
 import xGmodel
 import scipy
+import time
+import math
 
+SHOT = 10
+ASSIST = 301
+KEYPASS = 302
 NOTFOOT = 403 
 RIGHTFOOT = 402
 LEFTFOOT = 401
@@ -49,26 +54,70 @@ def assign_start_and_end_sectors(df: pd.DataFrame) -> pd.DataFrame:
 
 wyscout = WyscoutWrapper.WyscoutWrapper()
 
-df = wyscout.load_all_events(['Simple pass', 'High pass', 'Head pass', 'Smart pass', 'Cross'])
-print(df.columns)
-df = wyscout.fix_coordinates(df)
-df = assign_start_and_end_sectors(df)
-matrix = np.load('models/xT_5.npy')
-df = df.loc[(((df["end_x"] != 0) & (df["end_y"] != 68)) & ((df["end_x"] != 105) & (df["end_y"] != 0)))]
+start_time = time.time()
+df = wyscout.load_all_events(['Simple pass', 'High pass', 'Smart pass', 'Launch', 'Cross',  'Head pass', 'Shot', 'Hand pass'])
+print("--- %s seconds --- to load all events" % (time.time() - start_time))
+start_time = time.time()
+df = wyscout.denormalize_coordinates(df)
+print("--- %s seconds --- to denormalize the coordinates" % (time.time() - start_time))
+start_time = time.time()
 
-df['xT'] = df.apply(lambda row: matrix[row.end_sector[1] - 1][row.end_sector[0] - 1] 
-                    - matrix[row.start_sector[1] - 1][row.start_sector[0] - 1], axis = 1)
+new_df = df.shift(-1)
+df["nextPlayerId"] = new_df["playerId"]
+# figure out if the next subevent is a shot
+df["nextSubEventId"] = new_df["subEventId"]
+df["nextSubEventIsHeader"] = new_df.apply(lambda row: 1 if row.tags is not None and {'id': NOTFOOT} in row.tags else 0, axis = 1)
+not_headers = xGmodel.xGmodel(f'models/notheaders.pickle')
+headers = xGmodel.xGmodel(f'models/headers.pickle')
+toAssignNotHeader = df[(df["nextSubEventId"] == SHOT) & (df["nextSubEventIsHeader"] == 0)]
+df.drop(df[(df["nextSubEventId"] == SHOT) & (df["nextSubEventIsHeader"] == 0)].index, inplace = True)
+toAssignNotHeader = wyscout.assign_body_part(toAssignNotHeader)
+toAssignNotHeader = not_headers.assign_xA(toAssignNotHeader)
+toAssignHeader = df[(df["nextSubEventId"] == SHOT) & (df["nextSubEventIsHeader"] == 1)]
+df.drop(df[(df["nextSubEventId"] == SHOT) & (df["nextSubEventIsHeader"] == 1)].index, inplace = True)
+toAssignHeader = headers.assign_xA(toAssignHeader)
+
+df.drop(df[df["subEventId"] == SHOT].index, inplace = True)
+df['xA'] = 0
+df = df.append(toAssignHeader)
+df = df.append(toAssignNotHeader)
+
+print("--- %s seconds --- to perform xA assignment" % (time.time() - start_time))
+start_time = time.time()
+
+# df['start_sector'] = df.apply(lambda row: (math.ceil(row.X * 16 / 105), math.ceil(row.Y * 12 / 68)), axis = 1)
+# df['end_sector'] = df.apply(lambda row: (math.ceil(row.end_x * 16 / 105), math.ceil(row.end_y * 12 / 68)), axis = 1)
+df = assign_start_and_end_sectors(df)
+print("--- %s seconds --- to perform the start and ending sectors assignment" % (time.time() - start_time))
+
+df['successful'] = df.apply(func = lambda row: 1 if {'id': ACCURATE} in row.tags else 0, axis = 1)
+
+# drop columns that are both successful and the end sector is out of bounds                                                                     
+to_drop = df.loc[(df["end_sector"].apply(lambda x: x[1]) <= 0) & (df["end_sector"].apply(lambda x: x[0]) <= 0) 
+    & (df["end_sector"].apply(lambda x: x[0]) >= 16) & (df["end_sector"].apply(lambda x: x[1]) >= 13) & (df['successful'] == 1)]
+# drop the rows that were found by to_drop
+df = df.drop(to_drop.index)
+
+start_time = time.time()
+matrix = np.load('models/xT_5.npy')
 
 through = {'id': THROUGH}
 df['through'] = df.apply(lambda row: 1 if through in row.tags else 0, axis = 1)
-successful = {'id': ACCURATE}
-df['successful'] = df.apply(lambda row: 1 if successful in row.tags else 0, axis = 1)
-header = {'id': NOTFOOT}
-df['body_part'] = df.apply(lambda row: 'head/body' if header in row.tags else 'foot', axis = 1)
-left = {'id': LEFTFOOT}
-df['body_part'] = df.apply(lambda row: 'left foot' if left in row.tags else 'right foot', axis = 1)
-df = df[['id', 'playerId', 'X', 'Y', 'end_x', 'end_y', 'xT', 'body_part', 'successful', 'through',
-            'subEventId', 'matchId', 'eventSec', 'matchPeriod']]
+df = wyscout.assign_body_part(df)
+df['assist'] = df.apply(func = lambda row: 1 if {'id': ASSIST} in row.tags else 0, axis = 1)
+df['keyPass'] = df.apply(func = lambda row: 1 if {'id': KEYPASS} in row.tags else 0, axis = 1)
+
+print("--- %s seconds --- to perform the remaining column additions" % (time.time() - start_time))
+start_time = time.time()
+## create a new column for the xT value of each pass where the xT is 
+# matrix[row.end_sector[1] - 1][row.end_sector[0] - 1] - matrix[row.start_sector[1] - 1][row.start_sector[0] - 1] when the pass is successful
+# - matrix[row.start_sector[1] - 1][row.start_sector[0] - 1] when the pass is unsuccessful
+df['xT'] = df.apply(lambda row: matrix[row.end_sector[1] - 1][row.end_sector[0] - 1] 
+                    - matrix[row.start_sector[1] - 1][row.start_sector[0] - 1] if row.successful == 1 else
+                    - matrix[row.start_sector[1] - 1][row.start_sector[0] - 1], axis = 1)
+print("--- %s seconds --- to perform the xT assignment" % (time.time() - start_time))
+df = df[['playerId', 'X', 'Y', 'end_x', 'end_y', 'xT', 'xA', 'assist', 'keyPass', 'isLeftFoot', 'isRightFoot', 'isHeadOrBody', 'successful', 'through',
+            'subEventId', 'teamId', 'matchId', 'eventSec', 'matchPeriod', 'nextPlayerId']]
 
 conn = sqlite3.connect(f'{os.path.dirname(os.path.realpath(__file__))}/data/wyscout.db')
 df.to_sql('test_passes', conn, if_exists = 'replace', index=False)
