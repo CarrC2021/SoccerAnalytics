@@ -1,9 +1,12 @@
+lib/*
 bin/*
 include/*
-lib/*
-lib64
-lib64/*
+.vscode/*
+project/__pycache__/*
+project/data/*
+project/radars/*
+project/models/*
+project/plots/*
 share/*
 pyenv.cfg
-project/data/*
-project/all_events.json
+lib64
